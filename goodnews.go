@@ -68,7 +68,7 @@ func main() {
 		}
 	}
 
-	fmt.Printf("Running processUnsentItems")
+	fmt.Println("Running processUnsentItems...")
 
 	err = processUnsentItems(db)
 	if err != nil {
@@ -242,6 +242,11 @@ func processUnsentItems(db *sql.DB) error {
 		}
 
 		unsentItems = append(unsentItems, item)
+	}
+
+	if len(unsentItems) == 0 {
+		log.Println("No unsent items found...")
+		return nil
 	}
 
 	sort.Slice(unsentItems, func(i, j int) bool {
