@@ -1,5 +1,13 @@
 ## Goodnews
 
+## Disclaimer: Proper Attribution of News Sources for Scraped Content
+
+*This news scraping application is designed to aggregate and present news articles from various sources across the internet. While we strive to provide accurate and up-to-date information, it is important to note that the responsibility for proper attribution of news sources lies with each individual user of the application.*
+
+*By using this application, you acknowledge that it is your responsibility to always mention and attribute the original source of any news content that is obtained through the scraping process. This includes providing appropriate credit to the authors, publications, and websites from which the news articles originate.*
+
+*We encourage all users to respect the intellectual property rights of news publishers and content creators. Failure to attribute sources correctly may infringe upon copyright and ethical guidelines. Additionally, inaccurate or misleading attribution can undermine the credibility and integrity of the news dissemination process.*
+
 This GO package is scrapping websites with good news (by default from `https://positivnews.ru/` and `https://ntdtv.ru/c/pozitivnye-novosti`), saving the news from the last 14 days (in case they were not already saved) to the SQLite3 DB (by default `./data/news_items.db`) and sending them to the external service, specified in the `sendToExternalService` function (Telegram by default), sorted by the posted date. Once the item is sent, it is marked accordingly in the db and won't be sent again.
 
 ### Pre-req and installation
