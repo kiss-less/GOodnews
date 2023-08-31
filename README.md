@@ -32,3 +32,14 @@ docker run --rm -v goodnews_data:/app/data -e API_KEY=<YOUR_TELEGRAM_BOT_API_KEY
 If you already have a SQLite3 db file, and you'd like to use it with the newly created docker container, you can run the following command from the directory with the file to copy the file to the volume before you run the container (make sure that you have jq installed in your system):
 
 `cp ./news_items.db $(docker volume inspect goodnews_data | jq -r '.[0].Mountpoint')/news_items.db`
+
+#### Additional information
+
+Since version 1.1.0 you can use the following flags (both of them are turned off by default):
+
+* `--dry-run` to perform a dry run. We are still going to scrape the sources, but no write actions will be done to DB and message won't be sent to external source
+* `--debug` to output more information during the run
+
+Usage example:
+
+`go run goodnews.go --dry-run --debug`
