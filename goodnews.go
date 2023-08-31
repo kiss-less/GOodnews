@@ -185,6 +185,7 @@ func GetNews(url, ua string) NewsItem {
 
 	c.Visit(url)
 	news.p1 = news.text[0] + " " + news.text[1]
+	time.Sleep(500 * time.Millisecond)
 
 	return news
 }

@@ -1,3 +1,7 @@
+# 1.1.1
+
+* Introduced 0.5sec delay between colly requests to avoid potential rate-limiting
+
 # 1.1.0
 
 * Added README and CHANGELOG
