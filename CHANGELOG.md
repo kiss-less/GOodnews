@@ -1,7 +1,9 @@
 # 1.2.0
 
 * Improved the project structure for better readability: separated structs and functions
-* Adjusted message formatting to respect Telegram API limitations
+* Introduced `external.assembleCaption` message formatting func to respect Telegram API limitations
+* Adjusted signatures of `database.CheckAndInsertItem` and `database.ProcessUnsentItems` to include additional args
+#TODO: find out why there is a difference between len(newsItems) and items inserted to db and sent to the external source.
 
 # 1.1.1
 

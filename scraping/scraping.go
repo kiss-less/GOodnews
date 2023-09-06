@@ -36,7 +36,7 @@ func NewScraper(userAgent string, sources []string, reqSleepMs int, debug bool) 
 	}
 }
 
-func (s *Scraper) ScrapNewsUrlsFromSources() []string {
+func (s *Scraper) ScrapeNewsUrlsFromSources() []string {
 	var newsUrls []string
 	s.Collector.OnError(func(_ *colly.Response, err error) {
 		log.Println("Something went wrong: ", err)
@@ -58,7 +58,7 @@ func (s *Scraper) ScrapNewsUrlsFromSources() []string {
 				newsUrls = append(newsUrls, e.ChildAttr("a", "href"))
 			})
 		default:
-			log.Panic("The news source passed to scraper.ScrapNewsUrlsFromSources func is not found!")
+			log.Panic("The news source passed to scraper.ScrapeNewsUrlsFromSources func is not found!")
 		}
 
 		s.Collector.Visit(s.Sources[i])
@@ -72,9 +72,9 @@ func (s *Scraper) ScrapNewsUrlsFromSources() []string {
 	return newsUrls
 }
 
-func (s *Scraper) ScrapNewsFromNewsUrls(newsUrls []string) ([]NewsItem, error) {
+func (s *Scraper) ScrapeNewsFromNewsUrls(newsUrls []string) ([]NewsItem, error) {
 	if len(newsUrls) == 0 {
-		return nil, fmt.Errorf("the NewsUrls is empty. Please make sure to run scraper.ScrapNewsUrlsFromSources() first")
+		return nil, fmt.Errorf("the NewsUrls is empty. Please make sure to run scraper.ScrapeNewsUrlsFromSources() first")
 	} else {
 		var newsItems []NewsItem
 
@@ -129,7 +129,7 @@ func (s *Scraper) ScrapNewsFromNewsUrls(newsUrls []string) ([]NewsItem, error) {
 				})
 				newsItem.Category = "Мировые новости"
 			} else {
-				log.Panic("The news source passed to scraper.ScrapNewsFromNewsUrls func is not found!")
+				log.Panic("The news source passed to scraper.ScrapeNewsFromNewsUrls func is not found!")
 			}
 			if s.DebugFlag {
 				log.Printf("DEBUG: i = %d, processing url: %s len(newsUrls): %d\n", i, newsUrls[i], len(newsUrls))

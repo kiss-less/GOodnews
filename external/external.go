@@ -15,10 +15,7 @@ import (
 func SendToExternalService(item scraping.NewsItem) error {
 	apiKey := os.Getenv("API_KEY")
 	chatId := os.Getenv("CHAT_ID")
-
-	messageEnding := pickRandomMessageEnding()
-	caption := url.QueryEscape(fmt.Sprintf("%s: %s\n\n%s\n\n%s\n\n%s", item.Category, item.Title, item.P1, item.Posted, messageEnding))
-
+	caption := assembleCaption(item, 900)
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendPhoto", apiKey)
 
 	resp, err := http.Get(fmt.Sprintf("%s?chat_id=%s&photo=%s&caption=%s&parse_mode=Markdown", url, chatId, item.Image, caption))
@@ -36,7 +33,6 @@ func SendToExternalService(item scraping.NewsItem) error {
 		return fmt.Errorf("sendToExternalService request for item id: %d. StatusCode: %d", item.Id, resp.StatusCode)
 	}
 	defer resp.Body.Close()
-
 	return nil
 }
 
@@ -60,4 +56,28 @@ func pickRandomMessageEnding() string {
 	randomIndex := rand.Intn(len(messageEndings))
 
 	return messageEndings[randomIndex]
+}
+
+func assembleCaption(item scraping.NewsItem, maxLength int) string {
+	resultText := ""
+	caption := ""
+	for i := 0; i < len(item.Text); i++ {
+		elementLength := len(item.Text[i])
+		if len(resultText)+elementLength <= maxLength {
+			resultText += item.Text[i]
+		} else {
+			break
+		}
+	}
+	if resultText == "" {
+		resultText = item.P1
+	}
+
+	if len(resultText) > 0 && resultText[len(resultText)-1] != '.' {
+		caption = fmt.Sprintf("%s: %s\n\n%s\n\n%s\n\n%s", item.Category, item.Title, item.P1, item.Posted, pickRandomMessageEnding())
+	} else {
+		caption = fmt.Sprintf("%s: %s\n\n%s\n\n%s\n\n%s", item.Category, item.Title, resultText, item.Posted, pickRandomMessageEnding())
+	}
+
+	return url.QueryEscape(caption)
 }

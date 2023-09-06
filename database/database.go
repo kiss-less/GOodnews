@@ -44,7 +44,7 @@ func InitDB(dryRun bool, filePath string) (*sql.DB, error) {
 	return db, nil
 }
 
-func CheckAndInsertItem(dryRun bool, db *sql.DB, item scraping.NewsItem) error {
+func CheckAndInsertItem(dryRun bool, db *sql.DB, item scraping.NewsItem, newsAgeDays int) error {
 	if !dryRun {
 		query := "SELECT COUNT(*) FROM news_items WHERE url = ?"
 		var count int
@@ -67,7 +67,7 @@ func CheckAndInsertItem(dryRun bool, db *sql.DB, item scraping.NewsItem) error {
 			return nil
 		}
 
-		if count == 0 && daysDiff <= 14 {
+		if count == 0 && daysDiff <= float64(newsAgeDays) {
 			textJSON, err := json.Marshal(item.Text)
 			if err != nil {
 				return err
@@ -90,7 +90,7 @@ func CheckAndInsertItem(dryRun bool, db *sql.DB, item scraping.NewsItem) error {
 	return nil
 }
 
-func ProcessUnsentItems(dryRun bool, db *sql.DB) error {
+func ProcessUnsentItems(dryRun bool, db *sql.DB, reqSleepMs int) error {
 	if !dryRun {
 		tx, err := db.Begin()
 
@@ -99,7 +99,7 @@ func ProcessUnsentItems(dryRun bool, db *sql.DB) error {
 		}
 		defer tx.Rollback()
 
-		query := "SELECT id, category, posted, title, image, p1 FROM news_items WHERE item_was_sent = false"
+		query := "SELECT id, category, posted, title, image, text, p1 FROM news_items WHERE item_was_sent = false"
 		rows, err := tx.Query(query)
 		if err != nil {
 			return err
@@ -111,8 +111,14 @@ func ProcessUnsentItems(dryRun bool, db *sql.DB) error {
 		for rows.Next() {
 			var id int
 			var category, posted, title, image, p1 string
+			var textJSON []byte
+			var text []string
 
-			if err := rows.Scan(&id, &category, &posted, &title, &image, &p1); err != nil {
+			if err := rows.Scan(&id, &category, &posted, &title, &image, &textJSON, &p1); err != nil {
+				return err
+			}
+
+			if err := json.Unmarshal(textJSON, &text); err != nil {
 				return err
 			}
 
@@ -122,6 +128,7 @@ func ProcessUnsentItems(dryRun bool, db *sql.DB) error {
 				Posted:   posted,
 				Title:    title,
 				Image:    image,
+				Text:     text,
 				P1:       p1,
 			}
 
@@ -141,6 +148,7 @@ func ProcessUnsentItems(dryRun bool, db *sql.DB) error {
 
 		for _, item := range unsentItems {
 			err := external.SendToExternalService(item)
+			time.Sleep(time.Duration(reqSleepMs) * time.Millisecond)
 			if err != nil {
 				log.Printf("Error sending item with ID %d to external service: %v", item.Id, err)
 				continue

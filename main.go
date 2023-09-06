@@ -27,11 +27,12 @@ func main() {
 	}
 	defer db.Close()
 
-	newsUrls := s.ScrapNewsUrlsFromSources()
-	newsItems, err = s.ScrapNewsFromNewsUrls(newsUrls)
+	newsUrls := s.ScrapeNewsUrlsFromSources()
+	newsItems, err = s.ScrapeNewsFromNewsUrls(newsUrls)
+	fmt.Printf("len(newsItems): %d\n", len(newsItems))
 
 	if err != nil {
-		log.Printf("Error from s.ScrapNewsFromNewsUrls: %v", err)
+		log.Printf("Error from s.ScrapeNewsFromNewsUrls: %v", err)
 	}
 
 	if debug {
@@ -45,7 +46,7 @@ func main() {
 		if debug {
 			log.Printf("DEBUG: %s, %s, %s, %s, %s, p1:%s\n\ntext(elements: %d):%v\n\ntext[0]:%s", item.Url, item.Category, item.Posted, item.Title, item.Image, item.P1, len(item.Text), item.Text, item.Text[0])
 		}
-		err := database.CheckAndInsertItem(dryRun, db, item)
+		err := database.CheckAndInsertItem(dryRun, db, item, 28)
 		if err != nil {
 			log.Printf("Error processing item: %v", err)
 		}
@@ -53,7 +54,7 @@ func main() {
 
 	fmt.Println("Running processUnsentItems...")
 
-	err = database.ProcessUnsentItems(dryRun, db)
+	err = database.ProcessUnsentItems(dryRun, db, 500)
 	if err != nil {
 		log.Printf("Error processing unsent items: %v", err)
 	}
