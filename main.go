@@ -46,7 +46,7 @@ func main() {
 		if debug {
 			log.Printf("DEBUG: %s, %s, %s, %s, %s, p1:%s\n\ntext(elements: %d):%v\n\ntext[0]:%s", item.Url, item.Category, item.Posted, item.Title, item.Image, item.P1, len(item.Text), item.Text, item.Text[0])
 		}
-		err := database.CheckAndInsertItem(dryRun, db, item, 28)
+		err := database.CheckAndInsertItem(dryRun, db, item, 14)
 		if err != nil {
 			log.Printf("Error processing item: %v", err)
 		}

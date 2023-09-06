@@ -15,6 +15,8 @@ import (
 func SendToExternalService(item scraping.NewsItem) error {
 	apiKey := os.Getenv("API_KEY")
 	chatId := os.Getenv("CHAT_ID")
+
+	// As of now, Telegram API allows sendPhoto's caption parameter to contain up to 1024 charactes: https://core.telegram.org/bots/api#sendphoto
 	caption := assembleCaption(item, 900)
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendPhoto", apiKey)
 
@@ -50,6 +52,16 @@ func pickRandomMessageEnding() string {
 		"[С нами ты всегда найдёшь причину улыбнуться!](t.me/nomoredoomscrolling)",
 		"[Подними себе настроение на нашем канале!](t.me/nomoredoomscrolling)",
 		"[Позитивные истории ждут тебя! Присоединяйся!](t.me/nomoredoomscrolling)",
+		"[Подписывайся на лучший канал новостей!](t.me/nomoredoomscrolling)",
+		"[Ищешь хорошие новости? Тебе сюда!](t.me/nomoredoomscrolling)",
+		"[Присоединяйся и делай мир ярче вместе с нами!](t.me/nomoredoomscrolling)",
+		"[Вместе мы сделаем этот мир лучше!](t.me/nomoredoomscrolling)",
+		"[Лучшие новости каждый день - только у нас!](t.me/nomoredoomscrolling)",
+		"[Поделись позитивом с друзьями!](t.me/nomoredoomscrolling)",
+		"[Жми на кнопку подписки и получай дозу счастья!](t.me/nomoredoomscrolling)",
+		"[Не упусти возможность улучшить свой день!](t.me/nomoredoomscrolling)",
+		"[Подписка на счастье всего в одном клике!](t.me/nomoredoomscrolling)",
+		"[Новости, которые поднимут настроение!](t.me/nomoredoomscrolling)",
 	}
 
 	rand.New(rand.NewSource(time.Now().UnixNano()))
