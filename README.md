@@ -1,6 +1,5 @@
 ## Goodnews
 
-
 ## Disclaimer: Proper Attribution of News Sources for Scraped Content
 
 *This news scraping application is designed to aggregate and present news articles from various sources across the internet. While we strive to provide accurate and up-to-date information, it is important to note that the responsibility for proper attribution of news sources lies with each individual user of the application.*
