@@ -8,6 +8,8 @@ import (
 	"log"
 	"sort"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func InitDB(dryRun bool, filePath string) (*sql.DB, error) {

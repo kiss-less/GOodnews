@@ -7,8 +7,6 @@ import (
 
 	"goodnews/database"
 	"goodnews/scraping"
-
-	_ "github.com/mattn/go-sqlite3"
 )
 
 var dryRun bool
