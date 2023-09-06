@@ -1,3 +1,10 @@
+# 1.2.0
+
+* Improved the project structure for better readability: separated structs and functions
+* Introduced `external.assembleCaption` message formatting func to respect Telegram API limitations
+* Adjusted signatures of `database.CheckAndInsertItem` and `database.ProcessUnsentItems` to include additional args
+* Added more items to `external.pickRandomMessageEnding`
+
 # 1.1.1
 
 * Introduced 0.5sec delay between colly requests to avoid potential rate-limiting
