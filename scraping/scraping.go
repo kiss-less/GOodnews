@@ -20,9 +20,10 @@ type Scraper struct {
 	Sources    []string
 	Collector  *colly.Collector
 	ReqSleepMs int
+	DebugFlag  bool
 }
 
-func NewScraper(userAgent string, sources []string, reqSleepMs int) *Scraper {
+func NewScraper(userAgent string, sources []string, reqSleepMs int, debug bool) *Scraper {
 	c := colly.NewCollector()
 	c.UserAgent = userAgent
 
@@ -31,6 +32,7 @@ func NewScraper(userAgent string, sources []string, reqSleepMs int) *Scraper {
 		Sources:    sources,
 		Collector:  c,
 		ReqSleepMs: reqSleepMs,
+		DebugFlag:  debug,
 	}
 }
 
@@ -64,12 +66,15 @@ func (s *Scraper) ScrapNewsUrlsFromSources() []string {
 	}
 	newsUrls = s.removeDuplicatesAndRootSite(newsUrls)
 
+	if s.DebugFlag {
+		log.Printf("DEBUG: newsUrls: %v", newsUrls)
+	}
 	return newsUrls
 }
 
-func (s *Scraper) ScrapNewsFromNewsUrls(newsUrls []string) (error, []NewsItem) {
+func (s *Scraper) ScrapNewsFromNewsUrls(newsUrls []string) ([]NewsItem, error) {
 	if len(newsUrls) == 0 {
-		return fmt.Errorf("The NewsUrls is empty. Please make sure to run scraper.ScrapNewsUrlsFromSources() first!"), nil
+		return nil, fmt.Errorf("the NewsUrls is empty. Please make sure to run scraper.ScrapNewsUrlsFromSources() first")
 	} else {
 		var newsItems []NewsItem
 
@@ -126,14 +131,16 @@ func (s *Scraper) ScrapNewsFromNewsUrls(newsUrls []string) (error, []NewsItem) {
 			} else {
 				log.Panic("The news source passed to scraper.ScrapNewsFromNewsUrls func is not found!")
 			}
-			fmt.Printf("i = %d, processing url: %s len(newsUrls): %d\n", i, newsUrls[i], len(newsUrls))
+			if s.DebugFlag {
+				log.Printf("DEBUG: i = %d, processing url: %s len(newsUrls): %d\n", i, newsUrls[i], len(newsUrls))
+			}
 			s.Collector.Visit(newsUrls[i])
 			newsItem.P1 = newsItem.Text[0] + " " + newsItem.Text[1]
 			time.Sleep(time.Duration(s.ReqSleepMs) * time.Millisecond)
 
 			newsItems = append(newsItems, newsItem)
 		}
-		return nil, newsItems
+		return newsItems, nil
 	}
 }
 
