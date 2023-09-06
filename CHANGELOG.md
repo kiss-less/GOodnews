@@ -1,3 +1,8 @@
+# 1.2.0
+
+* Improved the project structure for better readability: separated structs and functions
+* Adjusted message formatting to respect Telegram API limitations
+
 # 1.1.1
 
 * Introduced 0.5sec delay between colly requests to avoid potential rate-limiting
