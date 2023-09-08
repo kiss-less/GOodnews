@@ -3,6 +3,7 @@ package scraping
 import (
 	"fmt"
 	"log"
+	"net/url"
 	"strings"
 	"time"
 
@@ -17,8 +18,17 @@ type NewsItem struct {
 
 type ScrapedEntity struct {
 	SourceUrl              string
-	ScrapeNewsUrlsElements []string
-	ScrapeNewsElements     map[string]*colly.HTMLElement
+	ScrapeNewsUrlsElements ScrapedNewsURL
+	ScrapeNewsHTMLElement  ScrapedNewsElement
+}
+
+type ScrapedNewsURL struct {
+	UrlElements []string
+}
+
+type ScrapedNewsElement struct {
+	TextTxt, CategoryTxt, PostedFormat, TitleTxt string
+	PostedAttr, ImageAttr                        []string
 }
 
 type Scraper struct {
@@ -44,13 +54,14 @@ func NewScraper(userAgent string, scrapedEntities []ScrapedEntity, reqSleepMs in
 
 func (s *Scraper) ScrapeNewsUrlsFromSources() []string {
 	var newsUrls []string
-	s.Collector.OnError(func(_ *colly.Response, err error) {
-		log.Println("Something went wrong: ", err)
-	})
 
-	// TODO: Adjust the struct to include mapping between url and HTML elements to be able to pass both to the constructor instead of using switch statement
 	for i := 0; i < len(s.ScrapedEntities); i++ {
-		for _, htmlElement := range s.ScrapedEntities[i].ScrapeNewsUrlsElements {
+
+		s.Collector.OnError(func(_ *colly.Response, err error) {
+			log.Println("Something went wrong: ", err)
+		})
+
+		for _, htmlElement := range s.ScrapedEntities[i].ScrapeNewsUrlsElements.UrlElements {
 			s.Collector.OnHTML(htmlElement, func(e *colly.HTMLElement) {
 				newsUrls = append(newsUrls, e.ChildAttr("a", "href"))
 			})
@@ -78,63 +89,53 @@ func (s *Scraper) ScrapeNewsFromNewsUrls(newsUrls []string) ([]NewsItem, error) 
 			var newsItem NewsItem
 			newsItem.Url = newsUrls[i]
 
-			s.Collector.OnError(func(_ *colly.Response, err error) {
-				log.Println("Something went wrong: ", err)
-			})
+			for j := 0; j < len(s.ScrapedEntities); j++ {
+				u, err := url.Parse(s.ScrapedEntities[j].SourceUrl)
+				if err != nil {
+					log.Printf("Error! the url %s can't be parsed! Proceeding without it", s.ScrapedEntities[j].SourceUrl)
+					break
+				}
 
-			// TODO: Adjust the struct to include mapping between url and HTML elements to be able to pass both to the constructor instead of using if\else condition
-			if strings.Contains(newsUrls[i], "https://positivnews.ru/") {
-				s.Collector.OnHTML(".entry-content p", func(e *colly.HTMLElement) {
-					newsItem.Text = append(newsItem.Text, e.Text)
-				})
+				if strings.Contains(newsUrls[i], u.Scheme+"://"+u.Host) {
+					s.Collector.OnError(func(_ *colly.Response, err error) {
+						log.Println("Something went wrong: ", err)
+					})
 
-				s.Collector.OnHTML(".post-categories a", func(e *colly.HTMLElement) {
-					newsItem.Category = e.Text
-				})
+					s.Collector.OnHTML(s.ScrapedEntities[j].ScrapeNewsHTMLElement.TextTxt, func(e *colly.HTMLElement) {
+						// Workaround for the articles without the heading <p> element in the div with the post
+						text := strings.TrimSpace(e.Text)
+						if text != "" {
+							newsItem.Text = append(newsItem.Text, text)
+						}
+					})
 
-				s.Collector.OnHTML(".entry-title", func(e *colly.HTMLElement) {
-					newsItem.Title = e.Text
-				})
+					s.Collector.OnHTML(s.ScrapedEntities[j].ScrapeNewsHTMLElement.CategoryTxt, func(e *colly.HTMLElement) {
+						newsItem.Category = e.Text
+					})
 
-				s.Collector.OnHTML(".entry-meta time.updated", func(e *colly.HTMLElement) {
-					newsItem.Posted = formatTime(e.Attr("datetime"), "2006-01-02T15:04:05-07:00")
-				})
+					s.Collector.OnHTML(s.ScrapedEntities[j].ScrapeNewsHTMLElement.TitleTxt, func(e *colly.HTMLElement) {
+						newsItem.Title = e.Text
+					})
 
-				s.Collector.OnHTML("div.post-inner div.post-thumbnail img.wp-post-image", func(e *colly.HTMLElement) {
-					newsItem.Image = e.Attr("src")
-				})
-			} else if strings.Contains(newsUrls[i], "https://ntdtv.ru/") {
-				s.Collector.OnHTML("div[id=cont_post] p", func(e *colly.HTMLElement) {
-					// Workaround for the articles without the heading <p> element in the cont_post div
-					text := strings.TrimSpace(e.Text)
-					if text != "" {
-						newsItem.Text = append(newsItem.Text, text)
+					s.Collector.OnHTML(s.ScrapedEntities[j].ScrapeNewsHTMLElement.PostedAttr[0], func(e *colly.HTMLElement) {
+						newsItem.Posted = formatTime(e.Attr(s.ScrapedEntities[j].ScrapeNewsHTMLElement.PostedAttr[1]), s.ScrapedEntities[j].ScrapeNewsHTMLElement.PostedFormat)
+					})
+
+					s.Collector.OnHTML(s.ScrapedEntities[j].ScrapeNewsHTMLElement.ImageAttr[0], func(e *colly.HTMLElement) {
+						newsItem.Image = e.Attr(s.ScrapedEntities[j].ScrapeNewsHTMLElement.ImageAttr[1])
+					})
+					s.Collector.Visit(newsUrls[i])
+
+					if s.DebugFlag {
+						log.Printf("DEBUG: i = %d, processing url: %s len(newsUrls): %d\n", i, newsUrls[i], len(newsUrls))
 					}
-				})
+					// newsItem.P1 = newsItem.Text[0] + " " + newsItem.Text[1]
+					time.Sleep(time.Duration(s.ReqSleepMs) * time.Millisecond)
 
-				s.Collector.OnHTML("header.entry-header h1", func(e *colly.HTMLElement) {
-					newsItem.Title = e.Text
-				})
-
-				s.Collector.OnHTML("span.entry-date time", func(e *colly.HTMLElement) {
-					newsItem.Posted = formatTime(e.Attr("datetime"), "2006-01-02 15:04:05")
-				})
-
-				s.Collector.OnHTML("link[itemprop=thumbnailUrl]", func(e *colly.HTMLElement) {
-					newsItem.Image = e.Attr("href")
-				})
-				newsItem.Category = "Мировые новости"
-			} else {
-				log.Panic("The news source passed to scraper.ScrapeNewsFromNewsUrls func is not found!")
+					newsItems = append(newsItems, newsItem)
+					break
+				}
 			}
-			if s.DebugFlag {
-				log.Printf("DEBUG: i = %d, processing url: %s len(newsUrls): %d\n", i, newsUrls[i], len(newsUrls))
-			}
-			s.Collector.Visit(newsUrls[i])
-			newsItem.P1 = newsItem.Text[0] + " " + newsItem.Text[1]
-			time.Sleep(time.Duration(s.ReqSleepMs) * time.Millisecond)
-
-			newsItems = append(newsItems, newsItem)
 		}
 		return newsItems, nil
 	}
@@ -165,15 +166,5 @@ func (s *Scraper) removeDuplicatesAndRootSite(newsUrls []string) []string {
 			result = append(result, url)
 		}
 	}
-
-	filteredResult := []string{}
-	for _, url := range result {
-		for i := 0; i < len(s.ScrapedEntities); i++ {
-			if s.ScrapedEntities[i].SourceUrl != url {
-				filteredResult = append(filteredResult, url)
-			}
-		}
-	}
-
-	return filteredResult
+	return result
 }
