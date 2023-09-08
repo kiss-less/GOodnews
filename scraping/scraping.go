@@ -15,24 +15,30 @@ type NewsItem struct {
 	Text                                    []string
 }
 
-type Scraper struct {
-	UserAgent  string
-	Sources    []string
-	Collector  *colly.Collector
-	ReqSleepMs int
-	DebugFlag  bool
+type ScrapedEntity struct {
+	SourceUrl              string
+	ScrapeNewsUrlsElements []string
+	ScrapeNewsElements     map[string]*colly.HTMLElement
 }
 
-func NewScraper(userAgent string, sources []string, reqSleepMs int, debug bool) *Scraper {
+type Scraper struct {
+	UserAgent       string
+	Collector       *colly.Collector
+	ReqSleepMs      int
+	DebugFlag       bool
+	ScrapedEntities []ScrapedEntity
+}
+
+func NewScraper(userAgent string, scrapedEntities []ScrapedEntity, reqSleepMs int, debug bool) *Scraper {
 	c := colly.NewCollector()
 	c.UserAgent = userAgent
 
 	return &Scraper{
-		UserAgent:  userAgent,
-		Sources:    sources,
-		Collector:  c,
-		ReqSleepMs: reqSleepMs,
-		DebugFlag:  debug,
+		UserAgent:       userAgent,
+		Collector:       c,
+		ReqSleepMs:      reqSleepMs,
+		DebugFlag:       debug,
+		ScrapedEntities: scrapedEntities,
 	}
 }
 
@@ -43,32 +49,22 @@ func (s *Scraper) ScrapeNewsUrlsFromSources() []string {
 	})
 
 	// TODO: Adjust the struct to include mapping between url and HTML elements to be able to pass both to the constructor instead of using switch statement
-	for i := 0; i < len(s.Sources); i++ {
-		switch s.Sources[i] {
-		case "https://positivnews.ru/":
-			s.Collector.OnHTML("div.digital-newspaper-container", func(e *colly.HTMLElement) {
+	for i := 0; i < len(s.ScrapedEntities); i++ {
+		for _, htmlElement := range s.ScrapedEntities[i].ScrapeNewsUrlsElements {
+			s.Collector.OnHTML(htmlElement, func(e *colly.HTMLElement) {
 				newsUrls = append(newsUrls, e.ChildAttr("a", "href"))
 			})
-
-			s.Collector.OnHTML("article.post", func(e *colly.HTMLElement) {
-				newsUrls = append(newsUrls, e.ChildAttr("a", "href"))
-			})
-		case "https://ntdtv.ru/c/pozitivnye-novosti":
-			s.Collector.OnHTML("div.entry-image", func(e *colly.HTMLElement) {
-				newsUrls = append(newsUrls, e.ChildAttr("a", "href"))
-			})
-		default:
-			log.Panic("The news source passed to scraper.ScrapeNewsUrlsFromSources func is not found!")
+			s.Collector.Visit(s.ScrapedEntities[i].SourceUrl)
+			time.Sleep(time.Duration(s.ReqSleepMs) * time.Millisecond)
 		}
-
-		s.Collector.Visit(s.Sources[i])
-		time.Sleep(time.Duration(s.ReqSleepMs) * time.Millisecond)
 	}
+
 	newsUrls = s.removeDuplicatesAndRootSite(newsUrls)
 
 	if s.DebugFlag {
 		log.Printf("DEBUG: newsUrls: %v", newsUrls)
 	}
+
 	return newsUrls
 }
 
@@ -159,8 +155,8 @@ func (s *Scraper) removeDuplicatesAndRootSite(newsUrls []string) []string {
 	uniqueMap := make(map[string]bool)
 	result := []string{}
 
-	for _, source := range s.Sources {
-		uniqueMap[source] = true
+	for i := 0; i < len(s.ScrapedEntities); i++ {
+		uniqueMap[s.ScrapedEntities[i].SourceUrl] = true
 	}
 
 	for _, url := range newsUrls {
@@ -172,19 +168,12 @@ func (s *Scraper) removeDuplicatesAndRootSite(newsUrls []string) []string {
 
 	filteredResult := []string{}
 	for _, url := range result {
-		if !contains(s.Sources, url) {
-			filteredResult = append(filteredResult, url)
+		for i := 0; i < len(s.ScrapedEntities); i++ {
+			if s.ScrapedEntities[i].SourceUrl != url {
+				filteredResult = append(filteredResult, url)
+			}
 		}
 	}
 
 	return filteredResult
-}
-
-func contains(urls []string, url string) bool {
-	for _, u := range urls {
-		if u == url {
-			return true
-		}
-	}
-	return false
 }
