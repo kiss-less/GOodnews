@@ -16,7 +16,6 @@ func main() {
 	flag.BoolVar(&dryRun, "dry-run", false, "Perform a dry run. We are still going to scrape the sources, but no write actions will be done to DB and message won't be sent to external source")
 	flag.BoolVar(&debug, "debug", false, "Output more information during the run")
 	flag.Parse()
-	userAgent := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36 Edg/116.0.1938.62"
 	db, err := database.InitDB(dryRun, "data/news_items.db")
 
 	if err != nil {
@@ -24,13 +23,13 @@ func main() {
 	}
 	defer db.Close()
 
-	scrapedEntities := []scraping.ScrapedEntity{
+	scrapeEntities := []scraping.ScrapeEntity{
 		{
 			SourceUrl: "https://positivnews.ru/",
-			ScrapeNewsUrlsElements: scraping.ScrapedNewsURL{
+			ScrapeNewsUrlsElements: scraping.ScrapeNewsURL{
 				UrlElements: []string{"div.digital-newspaper-container", "article.post"},
 			},
-			ScrapeNewsHTMLElement: scraping.ScrapedNewsElement{
+			ScrapeNewsHTMLElements: scraping.ScrapeNewsHTML{
 				TextTxt:      ".entry-content p",
 				CategoryTxt:  ".post-categories a",
 				PostedAttr:   []string{".entry-meta time.updated", "datetime"},
@@ -41,10 +40,10 @@ func main() {
 		},
 		{
 			SourceUrl: "https://ntdtv.ru/c/pozitivnye-novosti",
-			ScrapeNewsUrlsElements: scraping.ScrapedNewsURL{
+			ScrapeNewsUrlsElements: scraping.ScrapeNewsURL{
 				UrlElements: []string{"div.entry-image"},
 			},
-			ScrapeNewsHTMLElement: scraping.ScrapedNewsElement{
+			ScrapeNewsHTMLElements: scraping.ScrapeNewsHTML{
 				TextTxt:      "div[id=cont_post] p",
 				CategoryTxt:  "div.entry-meta a[href=\"https://ntdtv.ru/\"]",
 				PostedAttr:   []string{"span.entry-date time", "datetime"},
@@ -55,13 +54,29 @@ func main() {
 		},
 	}
 
-	s := scraping.NewScraper(userAgent, scrapedEntities, 500, debug)
-
+	s := scraping.NewScraper(scraping.PickRandomUserAgent(), scrapeEntities, 500, debug)
 	newsUrls := s.ScrapeNewsUrlsFromSources()
-	newsItems, err = s.ScrapeNewsFromNewsUrls(newsUrls)
+	var newsUrlsNotAlreadyInDB []string
+
+	for i := 0; i < len(newsUrls); i++ {
+		urlExists, err := database.CheckIfRecordWithUrlExists(dryRun, debug, db, newsUrls[i])
+		if err != nil {
+			log.Printf("Error checking the url %s in the db: %v\n", newsUrls[i], err)
+		}
+
+		if !urlExists {
+			newsUrlsNotAlreadyInDB = append(newsUrlsNotAlreadyInDB, newsUrls[i])
+		}
+	}
+	if debug {
+		log.Printf("DEBUG: len(newsUrlsNotAlreadyInDB): %d", len(newsUrlsNotAlreadyInDB))
+		log.Printf("DEBUG: newsUrlsNotAlreadyInDB: %v", newsUrlsNotAlreadyInDB)
+	}
+
+	newsItems, err = s.ScrapeNewsFromNewsUrls(newsUrlsNotAlreadyInDB)
 
 	if err != nil {
-		log.Printf("Error from s.ScrapeNewsFromNewsUrls: %v", err)
+		log.Printf("Error from s.ScrapeNewsFromNewsUrls: %v\n", err)
 	}
 
 	if debug {
