@@ -3,6 +3,9 @@ package scraping
 import (
 	"fmt"
 	"log"
+	"math/rand"
+	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -15,60 +18,71 @@ type NewsItem struct {
 	Text                                    []string
 }
 
-type Scraper struct {
-	UserAgent  string
-	Sources    []string
-	Collector  *colly.Collector
-	ReqSleepMs int
-	DebugFlag  bool
+type ScrapeEntity struct {
+	SourceUrl              string
+	ScrapeNewsUrlsElements ScrapeNewsURL
+	ScrapeNewsHTMLElements ScrapeNewsHTML
 }
 
-func NewScraper(userAgent string, sources []string, reqSleepMs int, debug bool) *Scraper {
+type ScrapeNewsURL struct {
+	UrlElements []string
+}
+
+type TextToParse struct {
+	Regex, Layout string
+}
+
+type ScrapeNewsHTML struct {
+	TextTxt, CategoryTxt, PostedFormat, TitleTxt string
+	PostedAttr, ImageAttr                        []string
+	PostedTextToParse                            TextToParse
+}
+
+type Scraper struct {
+	UserAgent      string
+	Collector      *colly.Collector
+	ReqSleepMs     int
+	DebugFlag      bool
+	ScrapeEntities []ScrapeEntity
+}
+
+func NewScraper(userAgent string, ScrapeEntities []ScrapeEntity, reqSleepMs int, debug bool) *Scraper {
 	c := colly.NewCollector()
 	c.UserAgent = userAgent
 
 	return &Scraper{
-		UserAgent:  userAgent,
-		Sources:    sources,
-		Collector:  c,
-		ReqSleepMs: reqSleepMs,
-		DebugFlag:  debug,
+		UserAgent:      userAgent,
+		Collector:      c,
+		ReqSleepMs:     reqSleepMs,
+		DebugFlag:      debug,
+		ScrapeEntities: ScrapeEntities,
 	}
 }
 
 func (s *Scraper) ScrapeNewsUrlsFromSources() []string {
 	var newsUrls []string
-	s.Collector.OnError(func(_ *colly.Response, err error) {
-		log.Println("Something went wrong: ", err)
-	})
 
-	// TODO: Adjust the struct to include mapping between url and HTML elements to be able to pass both to the constructor instead of using switch statement
-	for i := 0; i < len(s.Sources); i++ {
-		switch s.Sources[i] {
-		case "https://positivnews.ru/":
-			s.Collector.OnHTML("div.digital-newspaper-container", func(e *colly.HTMLElement) {
-				newsUrls = append(newsUrls, e.ChildAttr("a", "href"))
-			})
+	for i := 0; i < len(s.ScrapeEntities); i++ {
 
-			s.Collector.OnHTML("article.post", func(e *colly.HTMLElement) {
+		s.Collector.OnError(func(_ *colly.Response, err error) {
+			log.Println("Something went wrong: ", err)
+		})
+
+		for _, htmlElement := range s.ScrapeEntities[i].ScrapeNewsUrlsElements.UrlElements {
+			s.Collector.OnHTML(htmlElement, func(e *colly.HTMLElement) {
 				newsUrls = append(newsUrls, e.ChildAttr("a", "href"))
 			})
-		case "https://ntdtv.ru/c/pozitivnye-novosti":
-			s.Collector.OnHTML("div.entry-image", func(e *colly.HTMLElement) {
-				newsUrls = append(newsUrls, e.ChildAttr("a", "href"))
-			})
-		default:
-			log.Panic("The news source passed to scraper.ScrapeNewsUrlsFromSources func is not found!")
+			s.Collector.Visit(s.ScrapeEntities[i].SourceUrl)
+			time.Sleep(time.Duration(s.ReqSleepMs) * time.Millisecond)
 		}
-
-		s.Collector.Visit(s.Sources[i])
-		time.Sleep(time.Duration(s.ReqSleepMs) * time.Millisecond)
 	}
+
 	newsUrls = s.removeDuplicatesAndRootSite(newsUrls)
 
 	if s.DebugFlag {
 		log.Printf("DEBUG: newsUrls: %v", newsUrls)
 	}
+
 	return newsUrls
 }
 
@@ -82,73 +96,79 @@ func (s *Scraper) ScrapeNewsFromNewsUrls(newsUrls []string) ([]NewsItem, error) 
 			var newsItem NewsItem
 			newsItem.Url = newsUrls[i]
 
-			s.Collector.OnError(func(_ *colly.Response, err error) {
-				log.Println("Something went wrong: ", err)
-			})
+			for j := 0; j < len(s.ScrapeEntities); j++ {
+				u, err := url.Parse(s.ScrapeEntities[j].SourceUrl)
+				if err != nil {
+					log.Printf("Error! the url %s can't be parsed! Proceeding without it", s.ScrapeEntities[j].SourceUrl)
+					break
+				}
 
-			// TODO: Adjust the struct to include mapping between url and HTML elements to be able to pass both to the constructor instead of using if\else condition
-			if strings.Contains(newsUrls[i], "https://positivnews.ru/") {
-				s.Collector.OnHTML(".entry-content p", func(e *colly.HTMLElement) {
-					newsItem.Text = append(newsItem.Text, e.Text)
-				})
+				if strings.Contains(newsUrls[i], u.Scheme+"://"+u.Host) {
+					s.Collector.OnError(func(_ *colly.Response, err error) {
+						log.Println("Something went wrong: ", err)
+					})
 
-				s.Collector.OnHTML(".post-categories a", func(e *colly.HTMLElement) {
-					newsItem.Category = e.Text
-				})
+					s.Collector.OnHTML(s.ScrapeEntities[j].ScrapeNewsHTMLElements.TextTxt, func(e *colly.HTMLElement) {
+						// Workaround for the articles without the heading <p> element in the div with the post
+						text := strings.TrimSpace(e.Text)
+						if text != "" {
+							newsItem.Text = append(newsItem.Text, text)
+						}
+					})
 
-				s.Collector.OnHTML(".entry-title", func(e *colly.HTMLElement) {
-					newsItem.Title = e.Text
-				})
+					s.Collector.OnHTML(s.ScrapeEntities[j].ScrapeNewsHTMLElements.CategoryTxt, func(e *colly.HTMLElement) {
+						newsItem.Category = e.Text
+					})
 
-				s.Collector.OnHTML(".entry-meta time.updated", func(e *colly.HTMLElement) {
-					newsItem.Posted = formatTime(e.Attr("datetime"), "2006-01-02T15:04:05-07:00")
-				})
+					s.Collector.OnHTML(s.ScrapeEntities[j].ScrapeNewsHTMLElements.TitleTxt, func(e *colly.HTMLElement) {
+						newsItem.Title = e.Text
+					})
 
-				s.Collector.OnHTML("div.post-inner div.post-thumbnail img.wp-post-image", func(e *colly.HTMLElement) {
-					newsItem.Image = e.Attr("src")
-				})
-			} else if strings.Contains(newsUrls[i], "https://ntdtv.ru/") {
-				s.Collector.OnHTML("div[id=cont_post] p", func(e *colly.HTMLElement) {
-					// Workaround for the articles without the heading <p> element in the cont_post div
-					text := strings.TrimSpace(e.Text)
-					if text != "" {
-						newsItem.Text = append(newsItem.Text, text)
+					s.Collector.OnHTML(s.ScrapeEntities[j].ScrapeNewsHTMLElements.PostedAttr[0], func(e *colly.HTMLElement) {
+						newsItem.Posted = formatTime(e.Attr(s.ScrapeEntities[j].ScrapeNewsHTMLElements.PostedAttr[1]), s.ScrapeEntities[j].ScrapeNewsHTMLElements.PostedFormat, true)
+						if len(newsItem.Posted) == 0 && len(e.Text) > 0 {
+							parsedDate, err := parseDateTimeFromTextFallback(e.Text, s.ScrapeEntities[j].ScrapeNewsHTMLElements.PostedTextToParse.Regex, s.ScrapeEntities[j].ScrapeNewsHTMLElements.PostedTextToParse.Layout, s.ScrapeEntities[j].ScrapeNewsHTMLElements.PostedFormat)
+							if err != nil {
+								fmt.Println("Error:", err)
+							} else {
+
+								newsItem.Posted = parsedDate
+							}
+						}
+					})
+
+					s.Collector.OnHTML(s.ScrapeEntities[j].ScrapeNewsHTMLElements.ImageAttr[0], func(e *colly.HTMLElement) {
+						newsItem.Image = e.Attr(s.ScrapeEntities[j].ScrapeNewsHTMLElements.ImageAttr[1])
+					})
+					s.Collector.Visit(newsUrls[i])
+
+					if s.DebugFlag {
+						log.Printf("DEBUG: i = %d, processing url: %s len(newsUrls): %d\n", i, newsUrls[i], len(newsUrls))
 					}
-				})
 
-				s.Collector.OnHTML("header.entry-header h1", func(e *colly.HTMLElement) {
-					newsItem.Title = e.Text
-				})
+					time.Sleep(time.Duration(s.ReqSleepMs) * time.Millisecond)
 
-				s.Collector.OnHTML("span.entry-date time", func(e *colly.HTMLElement) {
-					newsItem.Posted = formatTime(e.Attr("datetime"), "2006-01-02 15:04:05")
-				})
-
-				s.Collector.OnHTML("link[itemprop=thumbnailUrl]", func(e *colly.HTMLElement) {
-					newsItem.Image = e.Attr("href")
-				})
-				newsItem.Category = "Мировые новости"
-			} else {
-				log.Panic("The news source passed to scraper.ScrapeNewsFromNewsUrls func is not found!")
+					if len(newsItem.Text) > 1 {
+						newsItem.P1 = newsItem.Text[0] + " " + newsItem.Text[1]
+					} else {
+						newsItem.P1 = newsItem.Text[0]
+					}
+					newsItems = append(newsItems, newsItem)
+					break
+				}
 			}
-			if s.DebugFlag {
-				log.Printf("DEBUG: i = %d, processing url: %s len(newsUrls): %d\n", i, newsUrls[i], len(newsUrls))
-			}
-			s.Collector.Visit(newsUrls[i])
-			newsItem.P1 = newsItem.Text[0] + " " + newsItem.Text[1]
-			time.Sleep(time.Duration(s.ReqSleepMs) * time.Millisecond)
-
-			newsItems = append(newsItems, newsItem)
 		}
 		return newsItems, nil
 	}
 }
 
-func formatTime(src, inputLayout string) string {
+func formatTime(src, inputLayout string, suppressError bool) string {
 
 	t, err := time.Parse(inputLayout, src)
 	if err != nil {
-		fmt.Println("Error parsing timestamp:", err)
+		if !suppressError {
+			fmt.Println("Error parsing timestamp:", err)
+		}
 		return ""
 	}
 
@@ -159,8 +179,8 @@ func (s *Scraper) removeDuplicatesAndRootSite(newsUrls []string) []string {
 	uniqueMap := make(map[string]bool)
 	result := []string{}
 
-	for _, source := range s.Sources {
-		uniqueMap[source] = true
+	for i := 0; i < len(s.ScrapeEntities); i++ {
+		uniqueMap[s.ScrapeEntities[i].SourceUrl] = true
 	}
 
 	for _, url := range newsUrls {
@@ -169,22 +189,44 @@ func (s *Scraper) removeDuplicatesAndRootSite(newsUrls []string) []string {
 			result = append(result, url)
 		}
 	}
-
-	filteredResult := []string{}
-	for _, url := range result {
-		if !contains(s.Sources, url) {
-			filteredResult = append(filteredResult, url)
-		}
-	}
-
-	return filteredResult
+	return result
 }
 
-func contains(urls []string, url string) bool {
-	for _, u := range urls {
-		if u == url {
-			return true
-		}
+func PickRandomUserAgent() string {
+	userAgents := []string{
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
+		"Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
+		"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36 Edg/116.0.1938.76",
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36 Edg/116.0.1938.62",
+		"Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36 Edg/116.0.1938.76",
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36 OPR/102.0.0.0",
+		"Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36 OPR/102.0.0.0",
+		"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36 OPR/102.0.0.0",
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/117.0",
+		"Mozilla/5.0 (Macintosh; Intel Mac OS X 13.5; rv:109.0) Gecko/20100101 Firefox/117.0",
+		"Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/117.0",
 	}
-	return false
+
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+	randomIndex := rand.Intn(len(userAgents))
+
+	return userAgents[randomIndex]
+}
+
+func parseDateTimeFromTextFallback(inputText, regex, layout, timeFormat string) (string, error) {
+	re := regexp.MustCompile(regex)
+	matches := re.FindStringSubmatch(inputText)
+
+	if len(matches) == 0 {
+		return "", fmt.Errorf("no date found in the input string")
+	}
+
+	parsedDate, err := time.Parse(layout, matches[0])
+	if err != nil {
+		return "", err
+	}
+
+	formattedDateTime := parsedDate.Format(timeFormat)
+	return formatTime(formattedDateTime, timeFormat, false), nil
 }

@@ -172,3 +172,25 @@ func ProcessUnsentItems(dryRun bool, db *sql.DB, reqSleepMs int) error {
 
 	return nil
 }
+
+func CheckIfRecordWithUrlExists(dryRun bool, debug bool, db *sql.DB, url string) (bool, error) {
+	if !dryRun {
+		query := "SELECT COUNT(*) FROM news_items WHERE url = ?"
+		var count int
+		err := db.QueryRow(query, url).Scan(&count)
+		if debug {
+			log.Printf("DEBUG: looked in db for item with %s url found %d\n", url, count)
+		}
+		if err != nil {
+			return false, err
+		}
+
+		if count > 0 {
+			return true, nil
+		} else {
+			return false, nil
+		}
+	} else {
+		return true, nil
+	}
+}

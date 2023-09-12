@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -73,6 +74,11 @@ func pickRandomMessageEnding() string {
 func assembleCaption(item scraping.NewsItem, maxLength int) string {
 	resultText := ""
 	caption := ""
+
+	if len(item.Text) == 1 {
+		item.Text = strings.Split(item.Text[0], "\n")
+	}
+
 	for i := 0; i < len(item.Text); i++ {
 		elementLength := len(item.Text[i])
 		if len(resultText)+elementLength <= maxLength {

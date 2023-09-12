@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 
 	"goodnews/database"
@@ -17,9 +16,6 @@ func main() {
 	flag.BoolVar(&dryRun, "dry-run", false, "Perform a dry run. We are still going to scrape the sources, but no write actions will be done to DB and message won't be sent to external source")
 	flag.BoolVar(&debug, "debug", false, "Output more information during the run")
 	flag.Parse()
-	urls := []string{"https://positivnews.ru/", "https://ntdtv.ru/c/pozitivnye-novosti"}
-	userAgent := "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36 Edg/116.0.1938.62"
-	s := scraping.NewScraper(userAgent, urls, 500, debug)
 	db, err := database.InitDB(dryRun, "data/news_items.db")
 
 	if err != nil {
@@ -27,12 +23,78 @@ func main() {
 	}
 	defer db.Close()
 
+	scrapeEntities := []scraping.ScrapeEntity{
+		{
+			SourceUrl: "https://positivnews.ru/",
+			ScrapeNewsUrlsElements: scraping.ScrapeNewsURL{
+				UrlElements: []string{"div.digital-newspaper-container", "article.post"},
+			},
+			ScrapeNewsHTMLElements: scraping.ScrapeNewsHTML{
+				TextTxt:      ".entry-content p",
+				CategoryTxt:  ".post-categories a",
+				PostedAttr:   []string{".entry-meta time.updated", "datetime"},
+				PostedFormat: "2006-01-02T15:04:05-07:00",
+				TitleTxt:     ".entry-title",
+				ImageAttr:    []string{"div.post-inner div.post-thumbnail img.wp-post-image", "src"},
+			},
+		},
+		{
+			SourceUrl: "https://ntdtv.ru/c/pozitivnye-novosti",
+			ScrapeNewsUrlsElements: scraping.ScrapeNewsURL{
+				UrlElements: []string{"div.entry-image"},
+			},
+			ScrapeNewsHTMLElements: scraping.ScrapeNewsHTML{
+				TextTxt:      "div[id=cont_post] p",
+				CategoryTxt:  "div.entry-meta a[href=\"https://ntdtv.ru/\"]",
+				PostedAttr:   []string{"span.entry-date time", "datetime"},
+				PostedFormat: "2006-01-02 15:04:05",
+				TitleTxt:     "header.entry-header h1",
+				ImageAttr:    []string{"link[itemprop=thumbnailUrl]", "href"},
+			},
+		},
+		{
+			SourceUrl: "https://allpozitive.ru/",
+			ScrapeNewsUrlsElements: scraping.ScrapeNewsURL{
+				UrlElements: []string{"div.col-1-2.mq-sidebar div.sb-widget ul.cp-widget.row.clearfix li.cp-wrap.clearfix div.cp-data p.cp-widget-title"},
+			},
+			ScrapeNewsHTMLElements: scraping.ScrapeNewsHTML{
+				TextTxt:      "div.entry.clearfix",
+				CategoryTxt:  "header.post-header p.meta.post-meta a[rel=\"category tag\"]",
+				PostedAttr:   []string{"p.meta.post-meta", "datetime"},
+				PostedFormat: "2006-01-02T15:04:05-07:00",
+				TitleTxt:     "h1.post-title",
+				ImageAttr:    []string{"div.post-thumbnail img", "src"},
+				PostedTextToParse: scraping.TextToParse{
+					Regex:  `\d{2}\.\d{2}\.\d{4}`,
+					Layout: "02.01.2006",
+				},
+			},
+		},
+	}
+
+	s := scraping.NewScraper(scraping.PickRandomUserAgent(), scrapeEntities, 500, debug)
 	newsUrls := s.ScrapeNewsUrlsFromSources()
-	newsItems, err = s.ScrapeNewsFromNewsUrls(newsUrls)
-	fmt.Printf("len(newsItems): %d\n", len(newsItems))
+	var newsUrlsNotAlreadyInDB []string
+
+	for i := 0; i < len(newsUrls); i++ {
+		urlExists, err := database.CheckIfRecordWithUrlExists(dryRun, debug, db, newsUrls[i])
+		if err != nil {
+			log.Printf("Error checking the url %s in the db: %v\n", newsUrls[i], err)
+		}
+
+		if !urlExists {
+			newsUrlsNotAlreadyInDB = append(newsUrlsNotAlreadyInDB, newsUrls[i])
+		}
+	}
+	if debug {
+		log.Printf("DEBUG: len(newsUrlsNotAlreadyInDB): %d", len(newsUrlsNotAlreadyInDB))
+		log.Printf("DEBUG: newsUrlsNotAlreadyInDB: %v", newsUrlsNotAlreadyInDB)
+	}
+
+	newsItems, err = s.ScrapeNewsFromNewsUrls(newsUrlsNotAlreadyInDB)
 
 	if err != nil {
-		log.Printf("Error from s.ScrapeNewsFromNewsUrls: %v", err)
+		log.Printf("Error from s.ScrapeNewsFromNewsUrls: %v\n", err)
 	}
 
 	if debug {
@@ -46,13 +108,13 @@ func main() {
 		if debug {
 			log.Printf("DEBUG: %s, %s, %s, %s, %s, p1:%s\n\ntext(elements: %d):%v\n\ntext[0]:%s", item.Url, item.Category, item.Posted, item.Title, item.Image, item.P1, len(item.Text), item.Text, item.Text[0])
 		}
-		err := database.CheckAndInsertItem(dryRun, db, item, 14)
+		err := database.CheckAndInsertItem(dryRun, db, item, 2)
 		if err != nil {
 			log.Printf("Error processing item: %v", err)
 		}
 	}
 
-	fmt.Println("Running processUnsentItems...")
+	log.Println("Running processUnsentItems...")
 
 	err = database.ProcessUnsentItems(dryRun, db, 500)
 	if err != nil {
