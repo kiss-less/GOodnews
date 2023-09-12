@@ -5,6 +5,7 @@ import (
 	"log"
 	"math/rand"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -27,9 +28,14 @@ type ScrapeNewsURL struct {
 	UrlElements []string
 }
 
+type TextToParse struct {
+	Regex, Layout string
+}
+
 type ScrapeNewsHTML struct {
 	TextTxt, CategoryTxt, PostedFormat, TitleTxt string
 	PostedAttr, ImageAttr                        []string
+	PostedTextToParse                            TextToParse
 }
 
 type Scraper struct {
@@ -119,7 +125,16 @@ func (s *Scraper) ScrapeNewsFromNewsUrls(newsUrls []string) ([]NewsItem, error) 
 					})
 
 					s.Collector.OnHTML(s.ScrapeEntities[j].ScrapeNewsHTMLElements.PostedAttr[0], func(e *colly.HTMLElement) {
-						newsItem.Posted = formatTime(e.Attr(s.ScrapeEntities[j].ScrapeNewsHTMLElements.PostedAttr[1]), s.ScrapeEntities[j].ScrapeNewsHTMLElements.PostedFormat)
+						newsItem.Posted = formatTime(e.Attr(s.ScrapeEntities[j].ScrapeNewsHTMLElements.PostedAttr[1]), s.ScrapeEntities[j].ScrapeNewsHTMLElements.PostedFormat, true)
+						if len(newsItem.Posted) == 0 && len(e.Text) > 0 {
+							parsedDate, err := parseDateTimeFromTextFallback(e.Text, s.ScrapeEntities[j].ScrapeNewsHTMLElements.PostedTextToParse.Regex, s.ScrapeEntities[j].ScrapeNewsHTMLElements.PostedTextToParse.Layout, s.ScrapeEntities[j].ScrapeNewsHTMLElements.PostedFormat)
+							if err != nil {
+								fmt.Println("Error:", err)
+							} else {
+
+								newsItem.Posted = parsedDate
+							}
+						}
 					})
 
 					s.Collector.OnHTML(s.ScrapeEntities[j].ScrapeNewsHTMLElements.ImageAttr[0], func(e *colly.HTMLElement) {
@@ -130,9 +145,14 @@ func (s *Scraper) ScrapeNewsFromNewsUrls(newsUrls []string) ([]NewsItem, error) 
 					if s.DebugFlag {
 						log.Printf("DEBUG: i = %d, processing url: %s len(newsUrls): %d\n", i, newsUrls[i], len(newsUrls))
 					}
-					newsItem.P1 = newsItem.Text[0] + " " + newsItem.Text[1]
+
 					time.Sleep(time.Duration(s.ReqSleepMs) * time.Millisecond)
 
+					if len(newsItem.Text) > 1 {
+						newsItem.P1 = newsItem.Text[0] + " " + newsItem.Text[1]
+					} else {
+						newsItem.P1 = newsItem.Text[0]
+					}
 					newsItems = append(newsItems, newsItem)
 					break
 				}
@@ -142,11 +162,13 @@ func (s *Scraper) ScrapeNewsFromNewsUrls(newsUrls []string) ([]NewsItem, error) 
 	}
 }
 
-func formatTime(src, inputLayout string) string {
+func formatTime(src, inputLayout string, suppressError bool) string {
 
 	t, err := time.Parse(inputLayout, src)
 	if err != nil {
-		fmt.Println("Error parsing timestamp:", err)
+		if !suppressError {
+			fmt.Println("Error parsing timestamp:", err)
+		}
 		return ""
 	}
 
@@ -190,4 +212,21 @@ func PickRandomUserAgent() string {
 	randomIndex := rand.Intn(len(userAgents))
 
 	return userAgents[randomIndex]
+}
+
+func parseDateTimeFromTextFallback(inputText, regex, layout, timeFormat string) (string, error) {
+	re := regexp.MustCompile(regex)
+	matches := re.FindStringSubmatch(inputText)
+
+	if len(matches) == 0 {
+		return "", fmt.Errorf("no date found in the input string")
+	}
+
+	parsedDate, err := time.Parse(layout, matches[0])
+	if err != nil {
+		return "", err
+	}
+
+	formattedDateTime := parsedDate.Format(timeFormat)
+	return formatTime(formattedDateTime, timeFormat, false), nil
 }

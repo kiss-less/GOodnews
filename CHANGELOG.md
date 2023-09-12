@@ -3,6 +3,8 @@
 * Breaking change! Introduced `scraping.ScrapeEntity` struct which is now a part of the `NewScraper` constructor. This change allows to define additional news sources without adjusting `scraping` funcs
 * Added `scraping.PickRandomUserAgent` func to randomize user agent for each run
 * Introduced `database.CheckIfRecordWithUrlExists` func to avoid scraping news that already exist in DB
+* Added a new source
+* Reduced the value of newsAgeDays to 2 days instead of 14
 
 # 1.2.0
 

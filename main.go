@@ -52,6 +52,24 @@ func main() {
 				ImageAttr:    []string{"link[itemprop=thumbnailUrl]", "href"},
 			},
 		},
+		{
+			SourceUrl: "https://allpozitive.ru/",
+			ScrapeNewsUrlsElements: scraping.ScrapeNewsURL{
+				UrlElements: []string{"div.col-1-2.mq-sidebar div.sb-widget ul.cp-widget.row.clearfix li.cp-wrap.clearfix div.cp-data p.cp-widget-title"},
+			},
+			ScrapeNewsHTMLElements: scraping.ScrapeNewsHTML{
+				TextTxt:      "div.entry.clearfix",
+				CategoryTxt:  "header.post-header p.meta.post-meta a[rel=\"category tag\"]",
+				PostedAttr:   []string{"p.meta.post-meta", "datetime"},
+				PostedFormat: "2006-01-02T15:04:05-07:00",
+				TitleTxt:     "h1.post-title",
+				ImageAttr:    []string{"div.post-thumbnail img", "src"},
+				PostedTextToParse: scraping.TextToParse{
+					Regex:  `\d{2}\.\d{2}\.\d{4}`,
+					Layout: "02.01.2006",
+				},
+			},
+		},
 	}
 
 	s := scraping.NewScraper(scraping.PickRandomUserAgent(), scrapeEntities, 500, debug)
@@ -90,7 +108,7 @@ func main() {
 		if debug {
 			log.Printf("DEBUG: %s, %s, %s, %s, %s, p1:%s\n\ntext(elements: %d):%v\n\ntext[0]:%s", item.Url, item.Category, item.Posted, item.Title, item.Image, item.P1, len(item.Text), item.Text, item.Text[0])
 		}
-		err := database.CheckAndInsertItem(dryRun, db, item, 14)
+		err := database.CheckAndInsertItem(dryRun, db, item, 2)
 		if err != nil {
 			log.Printf("Error processing item: %v", err)
 		}
