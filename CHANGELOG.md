@@ -1,3 +1,9 @@
+# 2.0.1
+
+* Fixed caption indentation
+* Removed datetime in caption by default 
+* Added emojis before the link
+
 # 2.0.0
 
 * Breaking change! Introduced `scraping.ScrapeEntity` struct which is now a part of the `NewScraper` constructor. This change allows to define additional news sources without adjusting `scraping` funcs
