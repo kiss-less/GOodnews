@@ -1,3 +1,7 @@
+# 2.0.2
+
+* Fixed a bug when text[i] items of the news were not considered for a caption
+
 # 2.0.1
 
 * Fixed caption indentation
