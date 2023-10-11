@@ -116,11 +116,13 @@ func assembleCaption(item scraping.NewsItem, maxLength int, postDatetime bool) s
 		dateTime = fmt.Sprintf("%s\n\n", item.Posted)
 	}
 
-	if len(resultText) > 0 && resultText[len(resultText)-1] != '.' {
+	if len(resultText) > 0 && resultText[len(resultText)-1] != '\n' {
 		caption = fmt.Sprintf("*%s: %s*\n\n%s\n\n%s%s", item.Category, item.Title, item.P1, dateTime, pickRandomMessageEnding())
 	} else {
 		caption = fmt.Sprintf("*%s: %s*\n\n%s\n\n%s%s", item.Category, item.Title, resultText, dateTime, pickRandomMessageEnding())
 	}
+
+	caption = strings.ReplaceAll(caption, "\n\n\n", "\n\n")
 
 	return url.QueryEscape(caption)
 }
