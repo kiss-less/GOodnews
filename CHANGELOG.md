@@ -1,3 +1,9 @@
+# 2.1.0
+
+* Changed formatting to html instead of markdown to support more options
+* Moved source to the title
+* Adjusted `external` package to handle 2 edge-cases: remove asterisk to avoid 400 response; separate P1 in case it is too long
+
 # 2.0.2
 
 * Fixed a bug when text[i] items of the news were not considered for a caption
