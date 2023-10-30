@@ -99,7 +99,7 @@ func ProcessUnsentItems(dryRun bool, db *sql.DB, reqSleepMs int) error {
 		}
 		defer tx.Rollback()
 
-		query := "SELECT id, category, posted, title, image, text, p1 FROM news_items WHERE item_was_sent = false"
+		query := "SELECT id, category, posted, url, title, image, text, p1 FROM news_items WHERE item_was_sent = false"
 		rows, err := tx.Query(query)
 		if err != nil {
 			return err
@@ -110,11 +110,11 @@ func ProcessUnsentItems(dryRun bool, db *sql.DB, reqSleepMs int) error {
 
 		for rows.Next() {
 			var id int
-			var category, posted, title, image, p1 string
+			var category, posted, url, title, image, p1 string
 			var textJSON []byte
 			var text []string
 
-			if err := rows.Scan(&id, &category, &posted, &title, &image, &textJSON, &p1); err != nil {
+			if err := rows.Scan(&id, &category, &posted, &url, &title, &image, &textJSON, &p1); err != nil {
 				return err
 			}
 
@@ -126,6 +126,7 @@ func ProcessUnsentItems(dryRun bool, db *sql.DB, reqSleepMs int) error {
 				Id:       id,
 				Category: category,
 				Posted:   posted,
+				Url:      url,
 				Title:    title,
 				Image:    image,
 				Text:     text,
